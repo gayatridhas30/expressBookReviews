@@ -6,6 +6,31 @@ const users = require("./auth_users.js").users;
 
 const public_users = express.Router();
 
+// Promise based helpers (async/await) used by every route below
+const getAllBooks = () => Promise.resolve(books);
+
+const getBookByISBN = (isbn) => Promise.resolve(books[isbn]);
+
+const getBooksByAuthor = (author) => Promise.resolve(
+    Object.fromEntries(
+        Object.entries(books).filter(([id, book]) =>
+            book.author.toLowerCase().includes(author.toLowerCase())
+        )
+    )
+);
+
+const getBooksByTitle = (title) => Promise.resolve(
+    Object.fromEntries(
+        Object.entries(books).filter(([id, book]) =>
+            book.title.toLowerCase().includes(title.toLowerCase())
+        )
+    )
+);
+
+const getReviews = (isbn) => Promise.resolve(
+    books[isbn] ? books[isbn].reviews || {} : undefined
+);
+
 // Register a new user
 public_users.post("/register", (req, res) => {
     const { username, password } = req.body;
@@ -36,7 +61,8 @@ public_users.post("/register", (req, res) => {
 // Get all books
 public_users.get("/", async (req, res) => {
     try {
-        return res.status(200).json(books);
+        const allBooks = await getAllBooks();
+        return res.status(200).json(allBooks);
     } catch (error) {
         return res.status(500).json({
             message: "Unable to retrieve books"
@@ -48,9 +74,7 @@ public_users.get("/", async (req, res) => {
 // Get book by ISBN/key
 public_users.get("/isbn/:isbn", async (req, res) => {
     try {
-        const isbn = req.params.isbn;
-
-        const book = books[isbn];
+        const book = await getBookByISBN(req.params.isbn);
 
         if (!book) {
             return res.status(404).json({
@@ -70,21 +94,15 @@ public_users.get("/isbn/:isbn", async (req, res) => {
 // Get books by author
 public_users.get("/author/:author", async (req, res) => {
     try {
-        const author = req.params.author.toLowerCase();
+        const result = await getBooksByAuthor(req.params.author);
 
-        const result = Object.entries(books).filter(([id, book]) =>
-            book.author.toLowerCase().includes(author)
-        );
-
-        if (result.length === 0) {
+        if (Object.keys(result).length === 0) {
             return res.status(404).json({
                 message: "No books found for this author"
             });
         }
 
-        return res.status(200).json(
-            Object.fromEntries(result)
-        );
+        return res.status(200).json(result);
     } catch (error) {
         return res.status(500).json({
             message: "Unable to search books"
@@ -96,21 +114,15 @@ public_users.get("/author/:author", async (req, res) => {
 // Get books by title
 public_users.get("/title/:title", async (req, res) => {
     try {
-        const title = req.params.title.toLowerCase();
+        const result = await getBooksByTitle(req.params.title);
 
-        const result = Object.entries(books).filter(([id, book]) =>
-            book.title.toLowerCase().includes(title)
-        );
-
-        if (result.length === 0) {
+        if (Object.keys(result).length === 0) {
             return res.status(404).json({
                 message: "No books found for this title"
             });
         }
 
-        return res.status(200).json(
-            Object.fromEntries(result)
-        );
+        return res.status(200).json(result);
     } catch (error) {
         return res.status(500).json({
             message: "Unable to search books"
@@ -122,17 +134,15 @@ public_users.get("/title/:title", async (req, res) => {
 // Get reviews for a book
 public_users.get("/review/:isbn", async (req, res) => {
     try {
-        const isbn = req.params.isbn;
+        const reviews = await getReviews(req.params.isbn);
 
-        const book = books[isbn];
-
-        if (!book) {
+        if (reviews === undefined) {
             return res.status(404).json({
                 message: "Book not found"
             });
         }
 
-        return res.status(200).json(book.reviews || {});
+        return res.status(200).json(reviews);
     } catch (error) {
         return res.status(500).json({
             message: "Unable to retrieve reviews"
